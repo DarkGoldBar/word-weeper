@@ -149,7 +149,7 @@ onBeforeUnmount(() => worker?.terminate())
       <div class="section-heading"><div><span class="eyebrow">猜测历史</span><h2>每一次语义匹配</h2></div><p>{{ guesses.length }} 次猜测</p></div>
       <div v-if="guesses.length" class="table-scroll">
         <table>
-          <thead><tr><th>玩家</th><th>输入词</th><th v-for="(capsule, i) in board" :key="capsule.id" :class="capsule.team">{{ capsule.team === 'red' ? '红' : capsule.team === 'blue' ? '蓝' : '灰' }}{{ (i % 5) + 1 }}</th></tr></thead>
+          <thead><tr><th>玩家</th><th>输入词</th><th v-for="(capsule, i) in board" :key="capsule.id" :class="capsule.team">{{ capsule.revealed ? capsule.word : `${capsule.team === 'red' ? '红' : capsule.team === 'blue' ? '蓝' : '灰'}${(i % 5) + 1}` }}</th></tr></thead>
           <tbody>
             <tr v-for="record in [...guesses].reverse()" :key="record.id">
               <td><span class="mini-player" :class="record.player">{{ record.player === 'red' ? '红' : '蓝' }}</span></td>
