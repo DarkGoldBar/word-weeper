@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { WORDS } from './data/words'
 import { useGameStore } from './stores/game'
 
 const game = useGameStore()
 const { board, currentPlayer, guesses, winner, redRevealed, blueRevealed } = storeToRefs(game)
 const input = ref('')
-const modelState = ref<'loading' | 'ready' | 'error'>('loading')
+const modelState = ref<'loading' | 'calibrating' | 'ready' | 'error'>('loading')
 const backend = ref('')
 const errorMessage = ref('')
 const calculating = ref(false)
@@ -16,6 +17,7 @@ let worker: Worker
 const statusText = computed(() => {
   if (winner.value) return `${winner.value === 'red' ? '红方' : '蓝方'}胜利`
   if (modelState.value === 'loading') return '正在加载语义模型'
+  if (modelState.value === 'calibrating') return '正在校准候选词'
   if (modelState.value === 'error') return '模型加载失败'
   return '对局进行中'
 })
@@ -30,7 +32,10 @@ function initWorker() {
   errorMessage.value = ''
   worker = new Worker(new URL('./workers/embedding.worker.ts', import.meta.url), { type: 'module' })
   worker.onmessage = (event: MessageEvent<{ type: string; backend?: string; similarities?: number[]; message?: string }>) => {
-    if (event.data.type === 'ready') {
+    if (event.data.type === 'calibrating') {
+      modelState.value = 'calibrating'
+      backend.value = event.data.backend ?? ''
+    } else if (event.data.type === 'ready') {
       modelState.value = 'ready'
       backend.value = event.data.backend ?? ''
     } else if (event.data.type === 'result' && event.data.similarities) {
@@ -50,7 +55,16 @@ function initWorker() {
     errorMessage.value = '工作线程启动失败，请刷新页面重试。'
     calculating.value = false
   }
-  worker.postMessage({ type: 'init', words: board.value.map((capsule) => capsule.word) })
+  const boardWordIds = new Set(board.value.map((capsule) => capsule.id))
+  const calibrationWords = WORDS.filter((entry) => !boardWordIds.has(entry.id))
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 100)
+    .map((entry) => entry.word)
+  worker.postMessage({
+    type: 'init',
+    words: board.value.map((capsule) => capsule.word),
+    calibrationWords,
+  })
 }
 
 function submit() {
@@ -94,6 +108,7 @@ onBeforeUnmount(() => worker?.terminate())
         <strong>{{ statusText }}</strong>
         <small v-if="modelState === 'ready'">模型就绪 · {{ backend }}</small>
         <small v-else-if="errorMessage">{{ errorMessage }}</small>
+        <small v-else-if="modelState === 'calibrating'">正在用 100 个随机词统一相似度分布 · {{ backend }}</small>
         <small v-else>首次加载需要下载模型，请稍候</small>
       </div>
       <div class="score red-score"><span>红方</span><strong>{{ redRevealed }}<i>/5</i></strong></div>
